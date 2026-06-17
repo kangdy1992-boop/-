@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>유리켐-인터로조 · 원료 배합일지 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+*{box-sizing:border-box}
+body{margin:0;font-family:'IBM Plex Sans KR','Noto Sans KR',sans-serif;background:#f3f0e8;color:#26221a}
+.mono{font-family:'IBM Plex Mono',monospace}
+header{background:#26221a;color:#f3f0e8;padding:20px 24px 16px}
+.hd-top{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px}
+.eyebrow{font-size:11px;letter-spacing:.18em;color:#b8860b;font-weight:600}
+h1{margin:4px 0 0;font-size:22px;font-weight:700}
+.btn{border:1.5px solid #26221a;background:#26221a;color:#f3f0e8;padding:8px 14px;border-radius:4px;font:inherit;font-weight:600;cursor:pointer;font-size:13px}
+.btn.gold{background:#b8860b;border-color:#b8860b}.btn.ghost{background:transparent;color:#f3f0e8;border-color:#f3f0e8}
+.btn:disabled{opacity:.5;cursor:wait}
+#msg{margin:12px 24px 0;padding:9px 14px;border-radius:4px;font-size:13px;font-weight:500;border:1px solid rgba(0,0,0,.12);display:none}
+#msg.ok{background:#e4efdd}#msg.err{background:#f6dcd7}#msg.warn{background:#f6eecb}#msg.info{background:#e3e8ee}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:16px 24px 4px}
+.card{background:#fdfcf8;border:1.5px solid #26221a;border-radius:6px;padding:10px 14px;box-shadow:3px 3px 0 #d6cfbd}
+.card .k{font-size:11px;color:#6b6353;font-weight:600;letter-spacing:.04em}.card .v{font-size:19px;font-weight:600;margin-top:2px;font-family:'IBM Plex Mono',monospace}
+/* 탭 */
+.tab-bar{display:flex;gap:0;margin:16px 24px 0;border-bottom:2px solid #26221a}
+.tab-btn{padding:9px 20px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid #26221a;border-bottom:none;background:#f3f0e8;color:#6b6353;border-radius:4px 4px 0 0;margin-right:4px}
+.tab-btn.tab-active{background:#26221a;color:#f3f0e8}
+/* 필터 */
+.filters{display:flex;gap:10px;align-items:center;padding:14px 24px 10px;flex-wrap:wrap;font-size:12.5px}
+select.f{background:#fdfcf8;border:1.5px solid #26221a;border-radius:4px;padding:5px 8px;font:inherit;font-size:13px}
+/* 테이블 */
+.tablewrap{margin:0 24px 20px;border:1.5px solid #26221a;border-radius:6px;overflow:auto;max-height:68vh;background:#fdfcf8;box-shadow:4px 4px 0 #d6cfbd}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{background:#26221a;color:#f3f0e8;font-weight:600;padding:7px 8px;white-space:nowrap;font-size:11.5px;position:sticky;top:0;z-index:2}
+td{border-bottom:1px solid #ddd6c6;padding:6px 8px;white-space:nowrap;background:#fdfcf8}
+tr:hover td{background:#faf6ea}
+td.num{text-align:right;font-family:'IBM Plex Mono',monospace}
+td.editable{cursor:text}td.editable:hover{outline:1.5px dashed #b8860b;outline-offset:-2px}
+.placeholder{color:#b9b2a4}
+/* 판정 배지 */
+.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:700}
+.v-ok{background:#e4efdd;color:#1d6b33;border:1px solid #bcd6ae}
+.v-ng{background:#f6dcd7;color:#a13a2a;border:1px solid #e3b3a8}
+.v-none{background:transparent;color:#9a917d;border:1px dashed #cfc7b4}
+.pos{color:#1d6b33}.neg{color:#a13a2a}
+.dot{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,.25);margin-right:5px;vertical-align:-1px}
+/* 확장 상세 행 */
+tr.detail-row td{background:#f7f4ec;padding:0;border-bottom:2px solid #b8860b}
+.detail-box{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 20px;padding:12px 16px 14px;font-size:12px}
+.detail-box .di{display:flex;flex-direction:column;gap:1px}
+.detail-box .dk{font-size:10px;font-weight:600;color:#6b6353;letter-spacing:.04em}
+.detail-box .dv{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;cursor:text}
+.detail-box .dv:hover{outline:1.5px dashed #b8860b;outline-offset:-1px}
+td input,.detail-box input{width:100%;min-width:50px;background:#fffbe8;border:1.5px solid #b8860b;border-radius:3px;padding:2px 4px;font:inherit}
+/* 그래프 */
+#section-chart{display:none;padding:0 24px 28px}
+.chart-toolbar{display:flex;align-items:center;gap:12px;padding:14px 0 16px;flex-wrap:wrap}
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:18px}
+.chart-card{background:#fdfcf8;border:1.5px solid #26221a;border-radius:6px;padding:16px 18px 12px;box-shadow:4px 4px 0 #d6cfbd;position:relative}
+.chart-card--full{grid-column:1/-1}
+.chart-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.chart-spec{font-size:11px;font-weight:400;color:#6b6353;margin-left:4px}
+.footnote{padding:0 24px 30px;font-size:11.5px;color:#6b6353;line-height:1.7}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd-top">
+    <div>
+      <div class="eyebrow">유리켐 — 인터로조 · QC RECORD</div>
+      <h1>원료 배합일지 대시보드</h1>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="btnPdf">📄 배합일지 PDF</button>
+      <button class="btn gold" id="btnXls">📊 관리대장 엑셀</button>
+      <button class="btn" id="btnReq" style="background:#4a6741;border-color:#4a6741">📋 작업요청서</button>
+      <button class="btn ghost" id="btnExport">⬇ 엑셀 내보내기</button>
+      <button class="btn ghost" id="btnBackup">백업</button>
+      <button class="btn ghost" id="btnRestore">복원</button>
+      <button class="btn ghost" id="btnReset">초기화</button>
+    </div>
+  </div>
+  <input type="file" id="filePdf" accept="application/pdf" multiple style="display:none">
+  <input type="file" id="fileXls" accept=".xlsx,.xls" style="display:none">
+  <input type="file" id="fileReq" accept=".xlsx,.xls" multiple style="display:none">
+  <input type="file" id="fileJson" accept=".json" style="display:none">
+</header>
+<div id="msg"></div>
+<div class="cards" id="cards"></div>
+<div class="tab-bar">
+  <button class="tab-btn tab-active" id="tabTable" onclick="switchView('table')">📋 배합 데이터</button>
+  <button class="tab-btn" id="tabGraph" onclick="switchView('graph')">📈 점도 추이 그래프</button>
+</div>
+<div id="section-table">
+  <div class="filters">
+    <b>필터</b>
+    <select class="f" id="fDate"><option value="ALL">전체 날짜</option></select>
+    <select class="f" id="fCode"><option value="ALL">전체 칼라코드</option></select>
+    <span style="font-size:11.5px;color:#6b6353">행을 클릭하면 상세 정보(배합량·롤밀·바인더 Lot 등)가 펼쳐집니다. 값은 클릭해 수정 가능합니다.</span>
+  </div>
+  <div class="tablewrap"><table><thead><tr>
+    <th>날짜</th><th>칼라코드</th><th>Lot No.</th><th>점도(cP)</th><th>판정</th><th>L*</th><th>a*</th><th>b*</th><th>비고</th>
+  </tr></thead><tbody id="tbody"></tbody></table></div>
+</div>
+<div id="section-chart">
+  <div class="chart-toolbar">
+    <b>칼라코드</b>
+    <select class="f" id="cChart" onchange="renderCharts()"><option value="ALL">전체 (개별 카드)</option></select>
+    <span style="font-size:11.5px;color:#6b6353">점 위에 마우스를 올리면 상세 정보가 보입니다.</span>
+  </div>
+  <div class="chart-grid" id="chartGrid"></div>
+</div>
+<div class="footnote">
+  ※ <b>Lot No.</b> = 접두어 + 배합일 YYMMDD. 판정 기준: PL-835-1 70k~90k · PL-345-2 39k~51k · PL-150-2 11.4k~14.8k · PL-580-2 66k~85k · PL-700-2 17.4k~24k · PL-735 15k~21k cP<br>
+  ※ PDF 업로드 → 배합 데이터+바인더 Lot 자동 추출 · 관리대장 엑셀 → 점도·색차 자동 매칭 · 작업요청서 → 요청일 기준 바인더 Lot 자동 매칭(±3일) · 비고란은 수기 입력 전용<br>
+  ※ 데이터는 이 브라우저에 저장. 공유: 엑셀 내보내기 또는 백업(JSON) → 복원
+</div>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const FIELDS=["date","code","color","machine","visc","L","a","b","total","real","rollBefore","rollDuring","rollAfter","memo","binderLot"];
+const COLOR_DOT={BLACK:"#2b2b2b",WHITE:"#e8e4da",RED:"#c33b2e",YELLOW:"#e0a614",BLUE:"#2c5fad",PINK:"#d4699b",GREEN:"#3d8a4e"};
+const LINE_COLOR={BLACK:'#3a3a3a',WHITE:'#a89878',RED:'#c03a2a',YELLOW:'#c9920a',BLUE:'#2c5fad',PINK:'#c45a8a',GREEN:'#3d8a4e'};
+const SPEC={"PL-835-1":[70000,90000],"PL-345-2":[39000,51000],"PL-150-2":[11400,14800],"PL-580-2":[66000,85000],"PL-700-2":[17400,24000],"PL-735":[15000,21000]};
+const LOT_PREFIX={"PL-835-1":"PLBKA","PL-835-1(H)":"PLBKB","PL-850":"PLBKC","NPL-835-1":"NPBKA","PL-150-2":"PLRDA","NPL-150-2":"NPRDA","PL-135":"PLPKA","PL-580-2":"PLBLA","PL-580-2(H)":"PLBLB","PL-550":"PLBLC","NPL-580-2":"NPBLA","PL-435":"PLGRA","PL-345-2":"PLYWA","PL-345-3":"PLYWB","NPL-345-2":"NPYWA","NPL-345-3":"NPYWB","PL-700-2":"PLWHA","PL-735":"PLWHB","NPL-700-2":"NPWHA","NPL-735":"NPWHB"};
+const NUMERIC=new Set(["visc","L","a","b","total","real","rollBefore","rollDuring","rollAfter"]);
+const KEY="batch-v3";
+const verdict=r=>{if(r.visc===null||r.visc===""||r.visc===undefined)return{t:"—",c:"v-none"};const s=SPEC[r.code];if(!s)return{t:"기준없음",c:"v-none"};return(+r.visc>=s[0]&&+r.visc<=s[1])?{t:"적합",c:"v-ok"}:{t:"부적합",c:"v-ng"}};
+const lotOf=r=>{const p=LOT_PREFIX[r.code],m=String(r.date||"").match(/^\d{2}(\d{2})\.(\d{2})\.(\d{2})/);return(p&&m)?p+m[1]+m[2]+m[3]:null};
+const fmt=n=>(n===null||n===undefined||n==="")?'—':Number(n).toLocaleString();
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const parseDateAny=s=>{const m=String(s??"").replace(/,/g,".").match(/^(\d{2,4})\.(\d{1,2})\.(\d{1,2})/);if(!m)return null;let y=+m[1];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[3])};
+const msgEl=(type,text)=>{const el=document.getElementById("msg");el.className=type;el.textContent=text;el.style.display="block"};
+
+/* ─── 시드 데이터 (바인더 Lot 포함) ─── */
+const SEED=[
+["2026.03.20","PL-835-1","BLACK","1호기",46840,10.26,0.06,-0.31,55000,52450,4.2,11.3,13.2,"","PCB20260209-02, 0210-01"],
+["2026.03.20","PL-550","BLUE","2호기",24050,12.5,14.82,-27.59,11420,11420,5.1,7.8,8.3,"","PCB20260210-02"],
+["2026.03.20","PL-700-2","WHITE","3호기",16960,95.64,-0.81,2.49,30000,30000,5.2,73.8,12.3,"","PCB20251113-02"],
+["2026.03.31","PL-835-1","BLACK","1호기",42490,16.18,0.07,0.08,55000,52000,22,23.2,24.3,"","PCB20260213-01~02"],
+["2026.03.31","PL-150-2","RED","2호기",11220,33.95,54.49,36.9,54000,53630,17.7,19,23,"","PCB20260218-01~02, 0219-01"],
+["2026.03.31","PL-580-2","BLUE","4호기",78690,11.67,19.58,-25,30000,29800,13.2,19.3,22.6,"","PCB20260219-01~02"],
+["2026.03.31","PL-345-2","YELLOW","2호기",38650,71.2,34.6,98.43,80000,78200,14,17.9,21,"","PCB20260219-02, 0220-01~02, 0223-01"],
+["2026.03.31","PL-345-3","YELLOW","2호기",13590,73.99,31.2,96.4,40000,39000,12.2,13.4,15.6,"","PCB20260223-01~02"],
+["2026.03.31","PL-700-2","WHITE","3호기",17110,96.76,-0.81,2.65,110000,110000,14.5,18.5,22.1,"","PCB20260224-01~02, 0225-01"],
+["2026.03.31","PL-735","WHITE","3호기",19650,94.28,-0.93,3.65,100000,100000,12.7,17.1,19,"","PCB20260223-02, 0225-02, 0226-01"],
+["2026.03.31","PL-550","BLUE","3호기",65380,10.82,17.85,-32.87,25000,24800,17.2,20.4,22,"","PCB20260226-02"],
+["2026.03.31","PL-135","PINK","2호기",18050,27.11,50.5,15.56,10000,10000,15,16,21,"",""],
+["2026.04.17","PL-835-1","BLACK","1호기",72160,12.59,0.07,-0.66,85000,80200,19.7,20.5,21.7,"","PCB20260309-01~02, 0310-01"],
+["2026.04.17","PL-150-2","RED","2호기",11440,34.37,56.08,38.59,97000,96600,17.5,20.4,22,"","PCB20260310-02, 0311-01~02, 0312-01"],
+["2026.04.17","PL-580-2","BLUE","1호기",80600,12.35,18.22,-26.67,25000,24800,25.7,27.1,28.7,"","PCB20260312-02"],
+["2026.04.17","PL-345-2","YELLOW","2호기",20100,69.59,36.25,93.05,50000,48400,19,20.8,22.8,"","PCB20260313-01~02"],
+["2026.04.17","PL-700-2","WHITE","3호기",19920,96.48,-0.74,2.36,135000,135000,16.3,22.6,23,"","PCB20260316-01~02, 0317-01~02"],
+["2026.04.17","PL-735","WHITE","3호기",17740,93.85,-0.79,4.21,35000,35000,21,23.6,24.2,"","PCB20260318-01"],
+["2026.05.07","PL-345-2","YELLOW","2호기",21320,73.07,31.36,98.83,77000,75000,20,21.4,22.9,"","PCB20260323-01~02, 0324-01"],
+["2026.05.07","PL-700-2","WHITE","3호기",18550,95.56,-0.83,2.83,102000,102000,19.8,22.7,23.2,"","PCB20260324-02, 0325-01~02"],
+["2026.05.07","PL-550","BLUE","1호기",73400,9.04,17.53,-26.95,55000,54000,19.9,22.1,23.1,"","PCB20260326-01~02"],
+["2026.05.08","PL-835-1(H)","BLACK","1호기",43070,17.37,0.1,0.34,85000,80800,24,25.3,26.1,"","PCB20260330-01~02, 0401-02"],
+["2026.05.12","PL-835-1","BLACK","1호기",null,null,null,null,5000,47000,19.4,20.6,21.1,"","PCB20260210-01"],
+["2026.05.12","PL-550","BLUE","4호기",null,null,null,null,5000,9900,18,20.4,20.7,"","PCB20260210-01"],
+["2026.05.27","PL-835-1","BLACK","1호기",73360,12.73,0.04,-0.29,56000,52300,22.6,24.8,26.8,"","PCB20260420-01~03"],
+["2026.05.27","PL-700-2","WHITE","3호기",16940,95.32,-0.83,2.59,85000,84860,20,25.4,26,"","PCB20260420-03, 0416-01~03"],
+["2026.05.27","PL-150-2","RED","2호기",12840,33.88,52.79,36.36,48000,47500,26.1,28.2,28.9,"","PCB20260408-03, 0409-01"],
+["2026.05.27","PL-345-2","YELLOW","2호기",23650,70.96,34.3,91.06,52000,50400,22.1,26.2,26.6,"","PCB20260413-01~02"],
+["2026.05.27","PL-735","WHITE","3호기",12590,93.8,-0.89,3.76,37000,37000,25.9,26.4,26.8,"","PCB20260414-03"],
+["2026.05.27","PL-580-2(H)","BLUE","3호기",89770,12.34,16.66,-24.45,26000,25400,27,30.2,31,"","PCB20260313-02"],
+["2026.06.04","PL-835-1","BLACK","1호기",94470,8.44,-0.08,-0.72,5000,4620,22.7,24.2,23.8,"","PCB20260506-01"],
+["2026.06.04","PL-700-2","WHITE","3호기",21330,95.8,-0.78,2.51,5000,5000,22.3,24.1,24.6,"","PCB20260506-01"],
+["2026.06.04","PL-150-2","RED","2호기",13820,36.11,57.69,39.52,5000,4960,24.1,24.8,25.6,"","PCB20260506-01"],
+["2026.06.04","PL-345-2","YELLOW","2호기",33500,66.05,38.72,96.73,5000,4770,22.1,24.4,24.7,"","PCB20260506-01"],
+["2026.06.04","PL-580-2","BLUE","3호기",82410,14.22,18.03,-26.77,5000,5000,25,25.7,26.3,"","PCB20260506-01"],
+["2026.06.04","PL-820","BLACK","1호기",91490,8.9,-0.46,-1.72,5000,4490,23.7,24.2,24.9,"","PCB20260506-01"],
+];
+const seedRows=()=>SEED.map((r,i)=>{const o={id:"s"+i};FIELDS.forEach((f,j)=>o[f]=r[j]);o.memo="";return o});
+let rows=[];
+try{const s=localStorage.getItem(KEY);rows=s?JSON.parse(s):seedRows()}catch(e){rows=seedRows()}
+if(!Array.isArray(rows)||!rows.length)rows=seedRows();
+// migrate old data without binderLot
+rows.forEach(r=>{if(r.binderLot===undefined)r.binderLot=""});
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){} if(chartView==='graph')setTimeout(renderCharts,60)};
+
+/* ─── 렌더링 ─── */
+let expandedId=null;
+function render(){
+  const fd=document.getElementById("fDate").value,fc=document.getElementById("fCode").value;
+  rows.sort((a,b)=>a.date.localeCompare(b.date)||a.code.localeCompare(b.code));
+  const view=rows.filter(r=>(fd==="ALL"||r.date===fd)&&(fc==="ALL"||r.code===fc));
+  const dates=[...new Set(rows.map(r=>r.date))].sort(),codes=[...new Set(rows.map(r=>r.code))].sort();
+  const dS=document.getElementById("fDate"),cS=document.getElementById("fCode");
+  dS.innerHTML='<option value="ALL">전체 날짜</option>'+dates.map(d=>`<option ${d===fd?"selected":""}>${d}</option>`).join("");
+  cS.innerHTML='<option value="ALL">전체 칼라코드</option>'+codes.map(c=>`<option ${c===fc?"selected":""}>${c}</option>`).join("");
+  // cards
+  const totalG=view.reduce((s,r)=>s+(+r.total||0),0),realG=view.reduce((s,r)=>s+(+r.real||0),0);
+  const missing=view.filter(r=>r.visc==null||r.visc==="").length;
+  const ng=view.filter(r=>verdict(r).t==="부적합").length;
+  document.getElementById("cards").innerHTML=[
+    ["배합 건수",view.length+" 건"],["원료배합량 합계",fmt(totalG)+" g"],["실중량 합계",fmt(realG)+" g"],
+    ["점도 미입력",missing+" 건"],["점도 부적합",ng+" 건"]
+  ].map(([k,v],i)=>`<div class="card"><div class="k">${k}</div><div class="v" ${i===4&&ng?'style="color:#a13a2a"':""}>${v}</div></div>`).join("");
+  // table
+  const tb=document.getElementById("tbody");
+  if(!view.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:30px;color:#9a917d">데이터가 없습니다</td></tr>';return}
+  let html="";
+  for(const r of view){
+    const vd=verdict(r),lot=lotOf(r),isExp=expandedId===r.id;
+    const ed=(f)=>{const v=r[f];return f==="memo"?(v||'<span class="placeholder">＋ 비고</span>'):(NUMERIC.has(f)?fmt(v):esc(v))};
+    html+=`<tr data-id="${r.id}" class="main-row" style="cursor:pointer" title="클릭하여 상세보기">
+      <td class="mono">${esc(r.date)}</td>
+      <td><span class="dot" style="background:${COLOR_DOT[r.color]||'#999'}"></span><b>${esc(r.code)}</b></td>
+      <td class="mono" style="${lot?'':'color:#9a917d'}">${lot||'—'}</td>
+      <td class="num editable" data-id="${r.id}" data-f="visc">${ed("visc")}</td>
+      <td style="text-align:center" title="${SPEC[r.code]?`기준 ${SPEC[r.code][0].toLocaleString()}~${SPEC[r.code][1].toLocaleString()}`:'기준 미설정'}"><span class="badge ${vd.c}">${vd.t}</span></td>
+      <td class="num editable" data-id="${r.id}" data-f="L">${ed("L")}</td>
+      <td class="num editable" data-id="${r.id}" data-f="a">${ed("a")}</td>
+      <td class="num editable" data-id="${r.id}" data-f="b">${ed("b")}</td>
+      <td class="editable" data-id="${r.id}" data-f="memo" style="min-width:150px;white-space:normal;font-size:12px">${ed("memo")}</td>
+    </tr>`;
+    if(isExp){
+      const d=(r.real!=null&&r.total!=null)?r.real-r.total:null;
+      const p=(r.real!=null&&r.total)?((r.real-r.total)/r.total*100):null;
+      html+=`<tr class="detail-row" data-detail="${r.id}"><td colspan="9"><div class="detail-box">
+        <div class="di"><div class="dk">호기</div><div class="dv">${esc(r.machine)}</div></div>
+        <div class="di"><div class="dk">배합량 총계 (g)</div><div class="dv" data-id="${r.id}" data-f="total">${fmt(r.total)}</div></div>
+        <div class="di"><div class="dk">실중량 (g)</div><div class="dv" data-id="${r.id}" data-f="real">${fmt(r.real)}</div></div>
+        <div class="di"><div class="dk">증감량 (g)</div><div class="dv ${d>0?'pos':d<0?'neg':''}">${d===null?'—':(d>0?'+':'')+fmt(d)}</div></div>
+        <div class="di"><div class="dk">증감률</div><div class="dv ${p>0?'pos':p<0?'neg':''}">${p===null?'—':(p>0?'+':'')+p.toFixed(1)+'%'}</div></div>
+        <div class="di"><div class="dk">롤밀 전 (°C)</div><div class="dv" data-id="${r.id}" data-f="rollBefore">${fmt(r.rollBefore)}</div></div>
+        <div class="di"><div class="dk">롤밀 중 (°C)</div><div class="dv" data-id="${r.id}" data-f="rollDuring">${fmt(r.rollDuring)}</div></div>
+        <div class="di"><div class="dk">롤밀 후 (°C)</div><div class="dv" data-id="${r.id}" data-f="rollAfter">${fmt(r.rollAfter)}</div></div>
+        <div class="di" style="grid-column:1/-1"><div class="dk">사용 바인더 LOT</div><div class="dv" data-id="${r.id}" data-f="binderLot" style="word-break:break-all">${esc(r.binderLot)||'<span class="placeholder">클릭하여 입력</span>'}</div></div>
+      </div></td></tr>`;
+    }
+  }
+  tb.innerHTML=html;
+}
+document.getElementById("fDate").onchange=render;
+document.getElementById("fCode").onchange=render;
+
+/* ─── 행 클릭: 확장/축소 + 인라인 편집 ─── */
+document.getElementById("tbody").addEventListener("click",e=>{
+  // editable cell
+  const edTd=e.target.closest("td.editable");
+  const edDv=e.target.closest(".dv[data-f]");
+  const ed=edTd||edDv;
+  if(ed&&!ed.querySelector("input")){
+    e.stopPropagation();
+    const{id,f}=ed.dataset;const row=rows.find(r=>r.id===id);if(!row)return;
+    const cur=row[f]??"";
+    ed.innerHTML=`<input value="${esc(cur)}">`;
+    const inp=ed.querySelector("input");inp.focus();inp.select();
+    const commit=()=>{let v=inp.value.trim();if(NUMERIC.has(f)){v=(v===""||v==="—")?null:Number(v.replace(/,/g,""));if(v!==null&&Number.isNaN(v))v=row[f]}row[f]=v;save();render()};
+    inp.addEventListener("blur",commit);
+    inp.addEventListener("keydown",ev=>{if(ev.key==="Enter")inp.blur();if(ev.key==="Escape"){inp.removeEventListener("blur",commit);render()}});
+    return;
+  }
+  // row expand
+  const tr=e.target.closest("tr.main-row");
+  if(tr){expandedId=expandedId===tr.dataset.id?null:tr.dataset.id;render()}
+});
+
+/* ─── PDF 업로드 ─── */
+document.getElementById("btnPdf").onclick=()=>document.getElementById("filePdf").click();
+document.getElementById("filePdf").addEventListener("change",async e=>{
+  const files=[...e.target.files];if(!files.length)return;
+  msgEl("info","PDF 분석 중…");let added=0,dup=0,fail=[];
+  for(const file of files){
+    try{
+      const res=await parsePdf(file);
+      const keys=new Set(rows.map(r=>`${r.date}|${r.code}|${r.total}`));
+      for(const p of res){
+        const k=`${p.date}|${p.code}|${p.total}`;
+        if(keys.has(k)){dup++;continue}keys.add(k);
+        rows.push({id:"u"+Date.now()+Math.random().toString(36).slice(2,7),
+          date:p.date,code:p.code,color:p.color,machine:p.machine,
+          visc:null,L:null,a:null,b:null,total:p.total,real:p.real,
+          rollBefore:p.rollBefore,rollDuring:p.rollDuring,rollAfter:p.rollAfter,
+          memo:"",binderLot:p.binderLot||""});
+        added++;
+      }
+    }catch(err){fail.push(`${file.name}: ${err.message}`)}
+  }
+  save();render();
+  if(fail.length)msgEl("err",fail.join(" / ")+(added?` (추가 ${added}건)`:""));
+  else if(added)msgEl("ok",`${added}건 추가${dup?` (중복 ${dup}건 제외)`:""}`);
+  else msgEl("warn",dup?`중복 ${dup}건.`:"PL 항목 없음.");
+  e.target.value="";
+});
+
+async function parsePdf(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let lines=[];
+  for(let pn=1;pn<=pdf.numPages;pn++){
+    const page=await pdf.getPage(pn);const tc=await page.getTextContent();
+    const byY=new Map();
+    for(const it of tc.items){if(!it.str.trim())continue;const y=Math.round(it.transform[5]/3)*3;if(!byY.has(y))byY.set(y,[]);byY.get(y).push({x:it.transform[4],s:it.str})}
+    [...byY.keys()].sort((a,b)=>b-a).forEach(y=>lines.push(byY.get(y).sort((a,b)=>a.x-b.x).map(o=>o.s).join(" ")));
+    lines.push("⏎PAGE⏎");
+  }
+  const text=lines.join("\n");
+  const dm=text.match(/배합일자\s*[:：]?\s*(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if(!dm)throw new Error("배합일자 없음");
+  const date=`${dm[1]}.${String(dm[2]).padStart(2,"0")}.${String(dm[3]).padStart(2,"0")}`;
+  const entries=[];let group=[];
+  const chunks=text.split(/(?=배합\s*지시량)|(?=롤밀\s*온도)|(?=BINDER\s*LOT)/i);
+  for(const ch of chunks){
+    if(/^롤밀\s*온도/i.test(ch.trim())){
+      [...ch.matchAll(/^\s*(\d{1,2})\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*$/gm)].forEach(m=>{
+        const idx=+m[1]-1;if(group[idx]){group[idx].rollBefore=+m[2];group[idx].rollDuring=+m[3];group[idx].rollAfter=+m[4]}
+      });continue;
+    }
+    if(/^BINDER\s*LOT/i.test(ch.trim())){
+      [...ch.matchAll(/^\s*(\d{1,2}|ALL)\s+(.+)$/gm)].forEach(m=>{
+        const lot=m[2].trim();
+        if(m[1]==="ALL"){group.forEach(e=>{if(e)e.binderLot=lot})}
+        else{const idx=+m[1]-1;if(group[idx])group[idx].binderLot=lot}
+      });
+      entries.push(...group);group=[];continue;
+    }
+    if(!/배합\s*지시량/.test(ch))continue;
+    const codeM=ch.match(/\b(N?PL-[0-9A-Z\-()]+|SL-[0-9A-Z\-()]+|H-[A-Z]{2}\d{2}-\d{2}[A-Z]?)/);
+    const code=codeM?codeM[1]:null;
+    if(!code||/^SL/.test(code)){group.push(null);continue}
+    const colorM=ch.match(/\b(BLACK|WHITE|RED|YELLOW|BLUE|PINK|GREEN)\b/);
+    const machM=ch.match(/(\d)\s*호기/);
+    const totM=ch.match(/총계\s*100\s*%\s*([\d,]+\.\d{2})/);
+    const total=totM?Number(totM[1].replace(/,/g,"")):null;
+    let real=null;
+    if(total!==null){
+      const nums=[...ch.matchAll(/([\d,]+\.\d{2})/g)].map(m=>Number(m[1].replace(/,/g,"")));
+      const pcts=[...ch.matchAll(/(\d{1,2})\s*%/g)].map(m=>+m[1]).filter(p=>p>0&&p<100);
+      const pool=[...nums];const take=v=>{const i=pool.findIndex(x=>Math.abs(x-v)<0.51);if(i>=0){pool.splice(i,1);return true}return false};
+      take(total);pcts.forEach(p=>take(total*p/100));
+      if(pool.length===1)real=pool[0];else if(pool.length>=2)real=Math.max(...pool);
+    }
+    group.push({date,code,color:colorM?colorM[1]:"",machine:machM?machM[1]+"호기":"",total,real,
+      rollBefore:null,rollDuring:null,rollAfter:null,binderLot:""});
+  }
+  entries.push(...group);
+  return entries.filter(Boolean);
+}
+
+/* ─── 관리대장 엑셀 ─── */
+document.getElementById("btnXls").onclick=()=>document.getElementById("fileXls").click();
+document.getElementById("fileXls").addEventListener("change",async e=>{
+  const file=e.target.files[0];if(!file)return;
+  msgEl("info","관리대장 매칭 중…");
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});const entries=[];
+    for(const name of wb.SheetNames){
+      const grid=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null});
+      let vc=null,lc=null;
+      for(let ri=0;ri<Math.min(8,grid.length);ri++)(grid[ri]||[]).forEach((v,ci)=>{const t=String(v??"");if(t.includes("점도")&&t.includes("cP"))vc=ci;if(t.trim()==="*L")lc=ci});
+      if(vc===null&&lc===null)continue;
+      for(const row of grid){if(!row||row.length<4)continue;const dt=parseDateAny(row[2]);if(!dt||!row[1])continue;
+        entries.push({code:String(row[1]).trim(),date:dt,qty:Number(row[3])||null,visc:vc!==null?row[vc]:null,L:lc!==null?row[lc]:null,a:lc!==null?row[lc+1]:null,b:lc!==null?row[lc+2]:null})}
+    }
+    if(!entries.length)throw new Error("기록 없음");let filled=0;
+    for(const r of rows){
+      if(r.visc!=null&&r.visc!=="")continue;const rd=parseDateAny(r.date);if(!rd)continue;
+      const cands=entries.filter(en=>(en.code===r.code||en.code==="N"+r.code)&&Math.abs(en.date-rd)<=3*86400000&&(en.visc!=null||en.L!=null));
+      if(!cands.length)continue;
+      cands.sort((x,y)=>{const qx=x.qty===+r.total?0:1,qy=y.qty===+r.total?0:1;if(qx!==qy)return qx-qy;return Math.abs(x.date-rd)-Math.abs(y.date-rd)});
+      const m=cands[0];filled++;
+      if(m.visc!=null)r.visc=Math.round(+m.visc);if(m.L!=null){r.L=Math.round(+m.L*100)/100;r.a=Math.round(+m.a*100)/100;r.b=Math.round(+m.b*100)/100}
+    }
+    save();render();msgEl(filled?"ok":"warn",filled?`${filled}건 점도·색차 입력 완료`:"매칭 항목 없음");
+  }catch(err){msgEl("err","실패: "+err.message)}e.target.value=""
+});
+
+/* ─── 그래프 ─── */
+let chartInstances={},chartView='table';
+function switchView(v){
+  chartView=v;
+  document.getElementById('section-table').style.display=v==='table'?'block':'none';
+  document.getElementById('section-chart').style.display=v==='graph'?'block':'none';
+  document.getElementById('tabTable').classList.toggle('tab-active',v==='table');
+  document.getElementById('tabGraph').classList.toggle('tab-active',v==='graph');
+  if(v==='graph')renderCharts();
+}
+function renderCharts(){
+  const codeMap={};
+  rows.forEach(r=>{if(r.visc!=null&&r.visc!==""){if(!codeMap[r.code])codeMap[r.code]=[];codeMap[r.code].push(r)}});
+  const sel=document.getElementById('cChart'),cur=sel.value;
+  sel.innerHTML='<option value="ALL">전체 (개별 카드)</option>'+Object.keys(codeMap).sort().map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('');
+  const cf=sel.value,codes=cf==='ALL'?Object.keys(codeMap).sort():(codeMap[cf]?[cf]:[]);
+  Object.values(chartInstances).forEach(c=>c.destroy());chartInstances={};
+  const grid=document.getElementById('chartGrid');grid.innerHTML='';
+  if(!codes.length){grid.innerHTML='<p style="padding:40px;color:#9a917d">점도 데이터가 있는 항목이 없습니다.</p>';return}
+  for(const code of codes){
+    const recs=codeMap[code].slice().sort((a,b)=>a.date.localeCompare(b.date));
+    const sp=SPEC[code],col=LINE_COLOR[recs[0].color]||'#888';
+    const labels=recs.map(r=>r.date.slice(2));
+    const ptC=recs.map(r=>{if(!sp)return'#a89878';return(+r.visc>=sp[0]&&+r.visc<=sp[1])?'#2d7a45':'#c03a2a'});
+    const ds=[{label:'점도 (cP)',data:recs.map(r=>+r.visc),borderColor:col,backgroundColor:col+'18',borderWidth:2.5,fill:true,tension:.25,pointBackgroundColor:ptC,pointBorderColor:ptC,pointRadius:6,pointHoverRadius:9}];
+    if(sp){
+      ds.push({label:`상한 ${sp[1].toLocaleString()}`,data:Array(recs.length).fill(sp[1]),borderColor:'#e05c3a',borderDash:[7,4],borderWidth:1.5,pointRadius:0,fill:false});
+      ds.push({label:`하한 ${sp[0].toLocaleString()}`,data:Array(recs.length).fill(sp[0]),borderColor:'#e09a3a',borderDash:[7,4],borderWidth:1.5,pointRadius:0,fill:false});
+    }
+    const wrap=document.createElement('div');wrap.className='chart-card'+(cf!=='ALL'?' chart-card--full':'');
+    const tDiv=document.createElement('div');tDiv.className='chart-title';
+    tDiv.innerHTML=`<span style="width:10px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,.25);background:${COLOR_DOT[recs[0].color]||'#999'};display:inline-block"></span>
+      <span>${code}</span>${sp?`<span class="chart-spec">기준 ${sp[0].toLocaleString()}~${sp[1].toLocaleString()} cP</span>`:'<span class="chart-spec" style="color:#c03a2a">기준 미설정</span>'}
+      <span class="chart-spec" style="margin-left:auto">${recs.length}건</span>`;
+    const cvs=document.createElement('canvas');cvs.id='c_'+code.replace(/[^a-z0-9]/gi,'_');
+    wrap.appendChild(tDiv);wrap.appendChild(cvs);grid.appendChild(wrap);
+    chartInstances[cvs.id]=new Chart(cvs,{type:'line',data:{labels,datasets:ds},options:{
+      responsive:true,maintainAspectRatio:true,aspectRatio:cf==='ALL'?2.2:2.8,
+      plugins:{legend:{position:'bottom',labels:{font:{family:"'IBM Plex Sans KR'",size:11},boxWidth:16}},
+        tooltip:{backgroundColor:'#26221a',titleFont:{family:"'IBM Plex Mono'",size:12},bodyFont:{family:"'IBM Plex Sans KR'",size:12},padding:10,
+          callbacks:{title:ctx=>labels[ctx[0].dataIndex],
+            label:ctx=>{if(ctx.datasetIndex!==0)return ctx.dataset.label;const r=recs[ctx.dataIndex];const vd=verdict(r);const lot=lotOf(r)||'—';
+              return[`점도: ${(+r.visc).toLocaleString()} cP  [${vd.t}]`,`Lot: ${lot}`,r.binderLot?`바인더: ${r.binderLot}`:''].filter(Boolean)}}}},
+      scales:{x:{ticks:{font:{family:"'IBM Plex Mono'",size:10},maxRotation:50,color:'#6b6353'},grid:{color:'#ede8dc'}},
+        y:{ticks:{font:{family:"'IBM Plex Mono'",size:10},color:'#6b6353',callback:v=>Number(v).toLocaleString()},grid:{color:'#ede8dc'},title:{display:true,text:'점도 (cP)',font:{size:10},color:'#6b6353'}}}
+    }});
+  }
+}
+
+/* ─── 작업요청서 → 바인더 Lot 자동 매칭 ─── */
+document.getElementById("btnReq").onclick=()=>document.getElementById("fileReq").click();
+document.getElementById("fileReq").addEventListener("change",async e=>{
+  const files=[...e.target.files];if(!files.length)return;
+  msgEl("info","작업요청서 분석 중…");
+  let totalFilled=0, totalEntries=0;
+  try{
+    for(const file of files){
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+      for(const name of wb.SheetNames){
+        const grid=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null});
+        /* 요청일 찾기 */
+        let reqDate=null;
+        for(let ri=0;ri<Math.min(10,grid.length);ri++){
+          for(const cell of(grid[ri]||[])){
+            const dm=String(cell||"").match(/요청일\s*[:：]?\s*(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})/);
+            if(dm){reqDate=new Date(+dm[1],+dm[2]-1,+dm[3]);break}
+          }
+          if(reqDate)break;
+        }
+        if(!reqDate)continue;
+        /* 바인더 LOT 컬럼 찾기 */
+        let lotCol=8;
+        for(let ri=5;ri<10;ri++)(grid[ri]||[]).forEach((v,ci)=>{if(String(v||"").match(/바인더[\s\S]*LOT/i))lotCol=ci});
+        /* 코드별 바인더 Lot 추출 */
+        const entries=[];
+        for(const row of grid){
+          if(!row)continue;
+          const txt=String(row[1]||"")+"\n"+String(row[0]||"");
+          const codeM=txt.match(/(N?PL-[0-9A-Z\-]+(?:\([A-Z]\))?)/);
+          if(!codeM)continue;
+          const code=codeM[1];
+          const lot=String(row[lotCol]||"").trim();
+          if(!lot||lot==="NaN"||lot==="nan"||lot==="undefined")continue;
+          entries.push({code,date:reqDate,lot});
+          totalEntries++;
+        }
+        /* 대시보드 행에 매칭 */
+        for(const r of rows){
+          if(r.binderLot&&r.binderLot.trim())continue;
+          const rd=parseDateAny(r.date);if(!rd)continue;
+          const m=entries.find(en=>en.code===r.code&&Math.abs(en.date-rd)<=3*86400000);
+          if(m){r.binderLot=m.lot;totalFilled++}
+        }
+      }
+    }
+    save();render();
+    if(totalFilled)msgEl("ok",`작업요청서에서 ${totalFilled}건의 바인더 Lot를 자동 입력했습니다. (총 ${totalEntries}건 추출, 이미 입력된 값은 보존)`);
+    else if(totalEntries)msgEl("warn",`요청서에서 ${totalEntries}건을 추출했으나 매칭되는 미입력 행이 없습니다. (요청일과 배합일이 ±3일 이내인지 확인)`);
+    else msgEl("warn","요청서에서 바인더 Lot 정보를 찾지 못했습니다. 요청일과 잉크코드·바인더 LOT 열이 있는지 확인해 주세요.");
+  }catch(err){msgEl("err","요청서 분석 실패: "+err.message)}
+  e.target.value="";
+});
+
+/* ─── 내보내기 / 백업 / 복원 / 초기화 ─── */
+document.getElementById("btnExport").onclick=()=>{
+  const head=["날짜","칼라코드","Lot No.","색상","호기","점도(cP)","기준(하한~상한)","판정","L*","a*","b*","배합량(g)","실중량(g)","증감(g)","증감률(%)","롤밀전","롤밀중","롤밀후","바인더 Lot","비고"];
+  const aoa=[head,...rows.map(r=>{const d=(r.real!=null&&r.total!=null)?r.real-r.total:null;const p=(r.real!=null&&r.total)?Math.round((r.real-r.total)/r.total*1000)/10:null;const sp=SPEC[r.code];
+    return[r.date,r.code,lotOf(r)||"",r.color,r.machine,r.visc,sp?`${sp[0].toLocaleString()}~${sp[1].toLocaleString()}`:"",verdict(r).t==="—"?"":verdict(r).t,r.L,r.a,r.b,r.total,r.real,d,p,r.rollBefore,r.rollDuring,r.rollAfter,r.binderLot,r.memo]})];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"배합일지");XLSX.writeFile(wb,"배합일지_요약.xlsx")};
+document.getElementById("btnBackup").onclick=()=>{const b=new Blob([JSON.stringify(rows,null,1)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="배합일지_백업.json";a.click()};
+document.getElementById("btnRestore").onclick=()=>document.getElementById("fileJson").click();
+document.getElementById("fileJson").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d))throw new Error("형식 오류");rows=d;save();render();msgEl("ok",`${rows.length}건 복원`)}catch(err){msgEl("err","실패: "+err.message)}e.target.value=""});
+document.getElementById("btnReset").onclick=()=>{if(confirm("초기화할까요?")){rows=seedRows();save();render();msgEl("ok","초기화 완료")}};
+render();
+</script>
+</body>
+</html>
